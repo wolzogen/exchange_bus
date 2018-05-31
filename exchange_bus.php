@@ -3,9 +3,13 @@
 Plugin Name: ExchangeBus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 2.0.2
+Version: 2.0.3
 Author: wolzogen
 */
+
+// Установление константы с названием файла для синхронизации
+if (!defined('EXCHANGE_BUS_SYNC_FILE'))
+    define('EXCHANGE_BUS_SYNC_FILE', 'catalog.csv');
 
 add_action('admin_menu', 'exchange_bus_add_pages');
 
@@ -22,6 +26,12 @@ function exchange_bus_add_pages()
 function module_page()
 {
     echo "<h2>Шина синхронизации данных</h2>";
+
+    // Проверяем наличие файла для синхронизации
+    if (!file_exists(get_home_path() . EXCHANGE_BUS_SYNC_FILE)) {
+        echo '<h4>Файл ' . EXCHANGE_BUS_SYNC_FILE . ' не найден</h4>';
+        return;
+    }
 }
 
 // Функция контента для страниы configuration_page
