@@ -1,9 +1,9 @@
 <?php
 /*
 Plugin Name: ExchangeBus
-Plugin URI: https://github.com/wolzogen/ExchangeBus
+Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 2.0.0
+Version: 2.0.1
 Author: wolzogen
 */
 
@@ -12,7 +12,7 @@ add_action('admin_menu', 'exchange_bus_add_pages');
 // Функция добавления страниц
 function exchange_bus_add_pages()
 {
-    // Добавление меню главногой страницы модуля:
+    // Добавление меню главной страницы модуля:
     add_menu_page('ExchangeBus', 'ExchangeBus', 7, __FILE__, 'exchange_bus_page', 'dashicons-filter');
     // Добавление субменю страницы конфигурации модуля:
     add_submenu_page(__FILE__, 'Configuration', 'Конфигурация', 8, 'exchange_bus_configuration', 'configuration_page');
