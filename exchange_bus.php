@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: ExchangeBus
+Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
 Version: 2.0.3
@@ -10,7 +10,6 @@ Author: wolzogen
 // Установление константы с названием файла для синхронизации
 if (!defined('EXCHANGE_BUS_CSV_FILE'))
     define('EXCHANGE_BUS_CSV_FILE', 'catalog.csv');
-
 // Определяем константу имени товара
 if (!defined('CSV_NAME'))
     define('CSV_NAME', 'name');
@@ -119,23 +118,45 @@ function importCsv($filepath)
 
         $csvLine = array_combine([CSV_NAME, CSV_SKU, CSV_STOCK, CSV_PRICE], str_getcsv($csv[$i], ';'));
 
-        $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d", '_sku', $csvLine[CSV_SKU]);
+        $sqlPrepare = $wpdb->prepare(
+            "SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d",
+            '_sku', $csvLine[CSV_SKU]
+        );
         $postmetaSkuResults = $wpdb->get_results($sqlPrepare);
 
         // Пропускаем итерацию, если количество записей с одинаковым _sku в поле meta_value более, чем 1
-        if (empty($postmetaResults) || count($postmetaResults) !== 1) {
+        if (empty($postmetaSkuResults) || count($postmetaSkuResults) !== 1) {
             continue;
         }
 
         // Устанавливаем указатель на первый элемент массива
         $postmetaSku = reset($postmetaSkuResults);
 
-        $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE post_id = %d AND (meta_key = %s OR meta_key = %s)", $postmetaSku->post_id, '_stock', '_price');
+        $sqlPrepare = $wpdb->prepare(
+            "SELECT * FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key in(%s, %s)",
+            $postmetaSku->post_id, '_stock', '_price'
+        );
         $postmetaProductResults = $wpdb->get_results($sqlPrepare);
 
         // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
         if (empty($postmetaProductResults) || count($postmetaProductResults) !== 2) {
             continue;
+        }
+
+        foreach ($postmetaProductResults as $postmetaProduct) {
+            switch ($postmetaProduct->meta_key) {
+                case '_price':
+                    $price = (int)preg_replace('/[^0-9]/', '', $csvLine[CSV_PRICE]);
+                    $wpdb->update($wpdb->postmeta,
+                        ['meta_value' => $price], ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
+                    );
+                    break;
+                case '_stock':
+                    $wpdb->update($wpdb->postmeta,
+                        ['meta_value' => $csvLine[CSV_STOCK]], ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
+                    );
+                    break;
+            }
         }
     }
 }
