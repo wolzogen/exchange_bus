@@ -77,7 +77,8 @@ function exchange_bus_csv_page()
     try {
         $fileDescriptor = getFileDescriptor(EXCHANGE_BUS_CSV_FILE);
         outputFileDetails($fileDescriptor);
-        importCsv($fileDescriptor->filepath);
+        $result = importCsv($fileDescriptor->filepath);
+        require_once 'templates/import_csv.php';
     } catch (LogicException $e) {
         echo $e->getMessage();
     }
@@ -97,15 +98,18 @@ function exchange_bus_xls_page()
 function outputFileDetails($fileDescriptor)
 {
     echo '<h4>Файл ' . $fileDescriptor->filename . ' найден</h4>';
-    echo 'Дата создания файла: ' . date("Y-d-m H:i:s", filemtime($fileDescriptor->filepath));
+    echo 'Дата создания файла: ' . date("Y-d-m H:i:s", filemtime($fileDescriptor->filepath)) . '<br>';
 }
 
 /**
  * @param string $filepath
+ * @return array
  */
 function importCsv($filepath)
 {
     global $wpdb;
+
+    $result = [];
 
     $csv = explode(PHP_EOL, file_get_contents($filepath));
     $csvSize = count($csv);
@@ -146,17 +150,60 @@ function importCsv($filepath)
         foreach ($postmetaProductResults as $postmetaProduct) {
             switch ($postmetaProduct->meta_key) {
                 case '_price':
+                    // Форматирование стоимости по правилу кратности
                     $price = (int)preg_replace('/[^0-9]/', '', $csvLine[CSV_PRICE]);
+                    $csvLine[CSV_PRICE] = $price % 50 === 0 ?
+                        $price : ($price + (50 - $price % 50));
+
+                    // Не обновлять запись, если значения до и после равны
+                    if ($postmetaProduct->meta_value == $csvLine[CSV_PRICE])
+                        break;
+
+                    insertCsvImportResult($result, $csvLine, $postmetaProduct);
+
                     $wpdb->update($wpdb->postmeta,
-                        ['meta_value' => $price], ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
+                        ['meta_value' => $csvLine[CSV_PRICE]],
+                        ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
                     );
                     break;
                 case '_stock':
+                    // Не обновлять запись, если значения до и после равны
+                    if ($postmetaProduct->meta_value == $csvLine[CSV_STOCK])
+                        break;
+
+                    insertCsvImportResult($result, $csvLine, $postmetaProduct);
+
                     $wpdb->update($wpdb->postmeta,
-                        ['meta_value' => $csvLine[CSV_STOCK]], ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
+                        ['meta_value' => $csvLine[CSV_STOCK]],
+                        ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
                     );
                     break;
             }
         }
     }
+
+    return $result;
+}
+
+/**
+ * Функция записи испортируемого результата для CSV
+ *
+ * @param array $result
+ * @param array $csvLine
+ * @param stdClass $postmetaProduct
+ */
+function insertCsvImportResult(&$result, $csvLine, $postmetaProduct)
+{
+    $result[$postmetaProduct->meta_id] = [
+        // Наименование
+        CSV_NAME => $csvLine[CSV_NAME],
+        // Артикул
+        CSV_SKU => $csvLine[CSV_SKU],
+        // meta_key
+        'meta_key' => $postmetaProduct->meta_key,
+        // meta_value до обновления
+        'meta_value_after' => $postmetaProduct->meta_value,
+        // meta_value после обновления
+        'meta_value_before' => $csvLine[str_replace('_', '', $postmetaProduct->meta_key)],
+    ];
 }
