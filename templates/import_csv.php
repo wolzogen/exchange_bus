@@ -1,12 +1,12 @@
-<? /** @var array $result */ ?>
+<? /** @var array $changes */ ?>
 
 <h2>Результат импортирования</h2>
 
-<?php if (empty($result)) : ?>
+<?php if (empty($changes)) : ?>
     <h4>Обновление не требуется</h4>
 <?php else : ?>
-    <div style="margin-top: 10px; border-style: dotted;">
-        <table style="text-align: center">
+    <div style="margin-top: 10px;">
+        <table style="text-align: center; width: 100%; border-style: dotted;">
             <tr>
                 <th>ID</th>
                 <th>Наименование</th>
@@ -15,10 +15,10 @@
                 <th>meta_value_after</th>
                 <th>meta_value_before</th>
             </tr>
-            <?php foreach ($result as $key => $value) : ?>
+            <?php foreach ($changes as $key => $value) : ?>
                 <tr>
                     <td style="width: 10%"><?= $key ?></td>
-                    <td style="width: 20%"><?= $value[CSV_NAME] ?></td>
+                    <td style="width: 20%; text-align: left;"><?= $value[CSV_NAME] ?></td>
                     <td style="width: 20%"><?= $value[CSV_SKU] ?></td>
                     <td style="width: 10%"><?= $value['meta_key'] ?></td>
                     <td style="width: 20%; color: #CD5C5C;"><b><?= $value['meta_value_after'] ?></b></td>
