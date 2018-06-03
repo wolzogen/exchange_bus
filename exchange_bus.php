@@ -77,7 +77,8 @@ function exchange_bus_csv_page()
     try {
         $fileDescriptor = getFileDescriptor(EXCHANGE_BUS_CSV_FILE);
         outputFileDetails($fileDescriptor);
-        $result = importCsv($fileDescriptor->filepath);
+        /** @see exchange_bus/templates/import_csv.php */
+        $changes = importCsv($fileDescriptor->filepath);
         require_once 'templates/import_csv.php';
     } catch (LogicException $e) {
         echo $e->getMessage();
@@ -109,16 +110,15 @@ function importCsv($filepath)
 {
     global $wpdb;
 
-    $result = [];
+    $changes = [];
 
     $csv = explode(PHP_EOL, file_get_contents($filepath));
     $csvSize = count($csv);
 
     for ($i = 0; $i < $csvSize; $i++) {
         // Пропускаем итерацию, если строка является заголовком или пустой строкой
-        if ($i === 0 || empty($csv[0])) {
+        if ($i === 0 || empty($csv[0]))
             continue;
-        }
 
         $csvLine = array_combine([CSV_NAME, CSV_SKU, CSV_STOCK, CSV_PRICE], str_getcsv($csv[$i], ';'));
 
@@ -129,9 +129,8 @@ function importCsv($filepath)
         $postmetaSkuResults = $wpdb->get_results($sqlPrepare);
 
         // Пропускаем итерацию, если количество записей с одинаковым _sku в поле meta_value более, чем 1
-        if (empty($postmetaSkuResults) || count($postmetaSkuResults) !== 1) {
+        if (empty($postmetaSkuResults) || count($postmetaSkuResults) !== 1)
             continue;
-        }
 
         // Устанавливаем указатель на первый элемент массива
         $postmetaSku = reset($postmetaSkuResults);
@@ -143,9 +142,8 @@ function importCsv($filepath)
         $postmetaProductResults = $wpdb->get_results($sqlPrepare);
 
         // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
-        if (empty($postmetaProductResults) || count($postmetaProductResults) !== 2) {
+        if (empty($postmetaProductResults) || count($postmetaProductResults) !== 2)
             continue;
-        }
 
         foreach ($postmetaProductResults as $postmetaProduct) {
             switch ($postmetaProduct->meta_key) {
@@ -159,42 +157,39 @@ function importCsv($filepath)
                     if ($postmetaProduct->meta_value == $csvLine[CSV_PRICE])
                         break;
 
-                    insertCsvImportResult($result, $csvLine, $postmetaProduct);
-
                     $wpdb->update($wpdb->postmeta,
                         ['meta_value' => $csvLine[CSV_PRICE]],
                         ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
                     );
+                    insertCsvImportResult($changes, $csvLine, $postmetaProduct);
                     break;
                 case '_stock':
                     // Не обновлять запись, если значения до и после равны
                     if ($postmetaProduct->meta_value == $csvLine[CSV_STOCK])
                         break;
 
-                    insertCsvImportResult($result, $csvLine, $postmetaProduct);
-
                     $wpdb->update($wpdb->postmeta,
                         ['meta_value' => $csvLine[CSV_STOCK]],
                         ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
                     );
+                    insertCsvImportResult($changes, $csvLine, $postmetaProduct);
                     break;
             }
         }
     }
-
-    return $result;
+    return $changes;
 }
 
 /**
- * Функция записи испортируемого результата для CSV
+ * Функция сохранения изменений при импорте для csv
  *
- * @param array $result
+ * @param array $changes
  * @param array $csvLine
  * @param stdClass $postmetaProduct
  */
-function insertCsvImportResult(&$result, $csvLine, $postmetaProduct)
+function insertCsvImportResult(&$changes, $csvLine, $postmetaProduct)
 {
-    $result[$postmetaProduct->meta_id] = [
+    $changes[$postmetaProduct->meta_id] = [
         // Наименование
         CSV_NAME => $csvLine[CSV_NAME],
         // Артикул
