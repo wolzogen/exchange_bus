@@ -31,6 +31,7 @@ function exchange_bus_module_page()
 
     try {
         outputFileDetails(EXCHANGE_BUS_CSV_FILE);
+        echo '<br/><a href="/wp-admin/admin.php?page=exchange_bus_csv" class="button button-primary" style="margin-top: 10px;">' . __("Импортировать") . '</a>';
     } catch (LogicException $e) {
         echo $e->getMessage();
     }
@@ -51,7 +52,7 @@ function outputFileDetails($filename)
     }
 
     echo '<h4>Файл ' . $filename . ' найден</h4>';
-    echo 'Дата создания файла: ' . date("Y-d-m H:i:s.", filemtime($filepath));
+    echo 'Дата создания файла: ' . date("Y-d-m H:i:s", filemtime($filepath));
 }
 
 // Функция контента для страниы exchange_bus_csv_page
