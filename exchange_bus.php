@@ -181,15 +181,6 @@ class CsvStandardImport extends CsvImport implements CsvImportInterface
     const FILENAME = 'csv_standard.csv';
 
     /**
-     * @param stdClass $stdClass
-     * @return mixed|void
-     */
-    public function load($stdClass)
-    {
-        parent::load($stdClass);
-    }
-
-    /**
      * @return array
      */
     public function synchronization()
@@ -231,9 +222,7 @@ class CsvStandardImport extends CsvImport implements CsvImportInterface
                 switch ($postmetaProduct->meta_key) {
                     case '_price':
                         // Форматирование стоимости по правилу кратности
-                        $price = (int)preg_replace('/[^0-9]/', '', $line['price']);
-                        $line['price'] = $price % 50 === 0 ?
-                            $price : ($price + (50 - $price % 50));
+                        $line['price'] = $this->_applyRuleToPrice($line['price']);
 
                         // Не обновлять запись, если значения до и после равны
                         if ($postmetaProduct->meta_value == $line['price'])
@@ -264,6 +253,16 @@ class CsvStandardImport extends CsvImport implements CsvImportInterface
     }
 
     /**
+     * @param string $price
+     * @return integer
+     */
+    private function _applyRuleToPrice($price)
+    {
+        $price = (int)preg_replace('/[^0-9]/', '', $price);
+        return $price % 50 === 0 ? $price : ($price + (50 - $price % 50));
+    }
+
+    /**
      * @param array $line
      * @param $postmetaProduct
      * @return array
@@ -285,8 +284,7 @@ class CsvStandardImport extends CsvImport implements CsvImportInterface
      */
     public static function getFileInformation($filename = '')
     {
-        $filename = $filename ?: self::FILENAME;
-        return parent::getFileInformation($filename);
+        return parent::getFileInformation($filename ?: self::FILENAME);
     }
 }
 
@@ -299,25 +297,25 @@ class CsvExtendedImport extends CsvImport implements CsvImportInterface
 
     /**
      * @param stdClass $stdClass
+     * @return array
      */
-    public function load($stdClass)
+    public function  getWarehouses($stdClass)
     {
-        parent::load($stdClass);
-    }
-
-    /**
-     * @param stdClass $stdClass
-     */
-    public function getWarehouses($stdClass)
-    {
-        $headers = $this->_getHeadersString($stdClass->filepath);
+        $warehouses = [];
+        $header = $this->_getHeaderString($stdClass->filepath);
+        foreach ($header as $item) {
+            if (preg_match('/склад$|склад[ ]/ui', $item)) {
+                $warehouses[md5($item)] = $item;
+            }
+        }
+        return $warehouses;
     }
 
     /**
      * @param string $filepath
      * @return array
      */
-    private function _getHeadersString($filepath)
+    private function _getHeaderString($filepath)
     {
         $file = fopen($filepath, 'r');
         $headers = [];
@@ -341,7 +339,6 @@ class CsvExtendedImport extends CsvImport implements CsvImportInterface
      */
     public static function getFileInformation($filename = '')
     {
-        $filename = $filename ?: self::FILENAME;
-        return parent::getFileInformation($filename);
+        return parent::getFileInformation($filename ?: self::FILENAME);
     }
 }
