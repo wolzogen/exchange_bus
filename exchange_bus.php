@@ -23,28 +23,21 @@ function exchange_bus_add_pages()
 // Функция контента для страницы exchange_bus_module_page
 function exchange_bus_module_page()
 {
+    /** @see template/standard_csv_import.php */
+    $standardCsvImport = new StandardCsvImport;
+    $extendedCsvImport = new ExtendedCsvImport;
     require_once 'template/module_page.php';
 }
 
 // Функция контента для страницы exchange_bus_csv_standard_page
 function exchange_bus_csv_standard_page()
 {
-    echo "<h2>CSV Standard Import</h2>";
-
     try {
-        $stdClass = CsvImport::getFileStd(CsvStandardImport::FILENAME);
-
-        if (!$stdClass) {
-            $message = CsvImport::getFileNotFoundInformation(CsvStandardImport::FILENAME);
-            throw new LogicException($message);
-        }
-
-        $class = new CsvStandardImport;
-        $class->load($stdClass);
-        /** @see exchange_bus/template/csv_standard_page.php */
-        $history = $class->synchronization();
-
-        require_once 'template/csv_standard_page.php';
+        /** @see template/standard_csv_import.php */
+        $standardCsvImport = new StandardCsvImport;
+        // Загружаем в память файл для последующей синхронизации
+        $standardCsvImport->load();
+        require_once 'template/import_standard.php';
     } catch (LogicException $e) {
         echo $e->getMessage();
     }
@@ -53,19 +46,11 @@ function exchange_bus_csv_standard_page()
 // Функция контента для страницы exchange_bus_csv_extended_page
 function exchange_bus_csv_extended_page()
 {
-    echo "<h2>CSV Extended Import</h2>";
-
     try {
-        $stdClass = CsvImport::getFileStd(CsvExtendedImport::FILENAME);
-
-        if (!$stdClass) {
-            $message = CsvImport::getFileNotFoundInformation(CsvStandardImport::FILENAME);
-            throw new LogicException($message);
-        }
-        $class = new CsvExtendedImport;
-        $warehouses = $class->getWarehouses($stdClass);
-
-        require_once 'template/csv_extended_page.php';
+        /** @see template/standard_csv_import.php */
+        $extendedCsvImport = new ExtendedCsvImport;
+        // $extendedCsvImport->load();
+        require_once 'template/import_extended.php';
     } catch (LogicException $e) {
         echo $e->getMessage();
     }
@@ -76,13 +61,17 @@ function exchange_bus_csv_extended_page()
  */
 class ExchangeBusHelper
 {
+    const WP_ADMIN_URL = '/wp-admin/admin.php?page=';
+
     /**
+     * Получение сформированной кнопки
+     *
      * @param string $page
      * @return string
      */
     public static function addActionButton($page)
     {
-        return '<a href="/wp-admin/admin.php?page=' . $page . '" class="button button-primary" style="margin-top: 10px;">' . __("Импортировать") . '</a>';
+        return '<a href="' . self::WP_ADMIN_URL . $page . '" class="button button-primary">' . __("Синхронизировать") . '</a>';
     }
 }
 
@@ -92,16 +81,26 @@ class ExchangeBusHelper
 interface CsvImportInterface
 {
     /**
-     * @param string $filename
-     * @return mixed
+     * Получения информации о файле
+     *
+     * @return string
      */
-    public static function getFileInformation($filename = '');
+    public function getCharacterization();
 
     /**
-     * @param stdClass $stdClass
+     * Загрузка csv-файла
+     *
+     * @throws LogicException
      * @return mixed
      */
-    public function load($stdClass);
+    public function load();
+
+    /**
+     * Синхронизация данных
+     *
+     * @return array
+     */
+    public function synchronization();
 }
 
 /**
@@ -109,236 +108,182 @@ interface CsvImportInterface
  */
 abstract class CsvImport implements CsvImportInterface
 {
-    protected $csvContent = null;
-    protected $csvCount = null;
+    /**
+     * @var array
+     */
+    protected $content = [];
 
     /**
-     * @param stdClass $stdClass
      * @return mixed|void
      */
-    public function load($stdClass)
+    public function load()
     {
-        $this->csvContent = explode(PHP_EOL, file_get_contents($stdClass->filepath));
-        $this->csvCount = count($this->csvContent);
-    }
-
-    /**
-     * @param string $filename
-     * @return string
-     */
-    public static function getFileInformation($filename = '')
-    {
-        $stdClass = CsvImport::getFileStd($filename);
-        return $stdClass ?
-            CsvImport::getFileFoundInformation($stdClass) :
-            CsvImport::getFileNotFoundInformation($filename);
-    }
-
-    /**
-     * @param stdClass $fileStd
-     * @return string
-     */
-    public static function getFileFoundInformation($fileStd)
-    {
-        $createdAt = date("Y-d-m H:i:s", filemtime($fileStd->filepath));
-        return $content = '<h4>Файл ' . $fileStd->filename . ' найден</h4><div>Дата создания файла: ' . $createdAt . '</div>';
-    }
-
-    /**
-     * @param string $filename
-     * @return string
-     */
-    public static function getFileNotFoundInformation($filename)
-    {
-        return '<h4>Файл ' . $filename . ' не найден</h4>';
-    }
-
-    /**
-     * @param string $filename
-     * @return stdClass
-     */
-    public static function getFileStd($filename)
-    {
-        $fileStd = new stdClass;
-        $filepath = get_home_path() . $filename;
-
+        $filepath = get_home_path() . static::FILENAME;
+        // Если не существует текущего файла, то выбрасываем LogicException
         if (!file_exists($filepath)) {
-            return null;
+            throw new LogicException(sprintf('Файл %s не найден', static::FILENAME));
         }
+        // Получаем данные из файла и разбиваем их в массив по разделителю PHP_EOL
+        $this->content = explode(PHP_EOL, file_get_contents($filepath));
+    }
 
-        $fileStd->filepath = $filepath;
-        $fileStd->filename = $filename;
+    /**
+     * Получение информации о файле
+     *
+     * @return string
+     */
+    public function getCharacterization()
+    {
+        $filepath = get_home_path() . static::FILENAME;
+        $content = '<h4>Файл ' . static::FILENAME . ' найден</h4>';
+        $content .= '<div>Последнее изменение: ' . date("Y-m-d H:i:s", filemtime($filepath)) . '</div>';
 
-        return $fileStd;
+        return $content;
     }
 }
 
 /**
- * Class CsvStandardImport
+ * Class StandardCsvImport
  */
-class CsvStandardImport extends CsvImport implements CsvImportInterface
+class StandardCsvImport extends CsvImport
 {
     const FILENAME = 'csv_standard.csv';
+    const CUR_PAGE = 'exchange_bus_csv_standard_page';
 
     /**
+     * Синхронизация данных
+     *
      * @return array
      */
     public function synchronization()
     {
         global $wpdb;
 
-        $history = [];
+        $operations = [];
+        // Зараннее просчитываем количество элементов в массиве, что бы не пересчитывать каждую итерацию в цикле
+        $count = count($this->content);
 
-        for ($i = 0; $i < $this->csvCount; $i++) {
-            // Пропускаем итерацию, если строка является заголовком или пустой строкой
-            if ($i === 0 || empty($this->csvContent[$i]))
+        for ($i = 0; $i < $count; $i++) {
+            // Пропускаем заголовок и пустые строки
+            if ($i === 0 || empty($this->content[$i]))
                 continue;
-
-            $line = array_combine(['name', 'sku', 'stock', 'price'], str_getcsv($this->csvContent[$i], ';'));
-            $sqlPrepare = $wpdb->prepare(
-                "SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d",
-                '_sku', $line['sku']
-            );
-            $postmetaSkuResults = $wpdb->get_results($sqlPrepare);
-
-            // Пропускаем итерацию, если количество записей с одинаковым _sku в поле meta_value более, чем 1
-            if (empty($postmetaSkuResults) || count($postmetaSkuResults) !== 1)
+            // Формируем массив с ключами для более удобного обращения к массиву
+            $line = array_combine(['name', 'sku', 'stock', 'price'], str_getcsv($this->content[$i], ';'));
+            // Подготавливаем и выполняем запрос, в котором ищем записи по полю _sku
+            $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d", '_sku', $line['sku']);
+            $postmetaBySkuResults = $wpdb->get_results($sqlPrepare);
+            // На уровне базы не гарантируется уникальность записи по sku
+            if (count($postmetaBySkuResults) !== 1)
                 continue;
-
             // Устанавливаем указатель на первый элемент массива
-            $postmetaSku = reset($postmetaSkuResults);
-
+            $postmetaSku = reset($postmetaBySkuResults);
             $sqlPrepare = $wpdb->prepare(
                 "SELECT * FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key in(%s, %s)",
                 $postmetaSku->post_id, '_stock', '_price'
             );
-            $postmetaProductResults = $wpdb->get_results($sqlPrepare);
-
+            $postmetaStockAndPriceResults = $wpdb->get_results($sqlPrepare);
             // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
-            if (empty($postmetaProductResults) || count($postmetaProductResults) !== 2)
+            if (count($postmetaStockAndPriceResults) !== 2)
                 continue;
-
-            foreach ($postmetaProductResults as $postmetaProduct) {
-                switch ($postmetaProduct->meta_key) {
+            foreach ($postmetaStockAndPriceResults as $postmetaResult) {
+                switch ($postmetaResult->meta_key) {
                     case '_price':
                         // Форматирование стоимости по правилу кратности
-                        $line['price'] = $this->_applyRuleToPrice($line['price']);
-
+                        $line['price'] = self::_applyPriceRule($line['price']);
                         // Не обновлять запись, если значения до и после равны
-                        if ($postmetaProduct->meta_value == $line['price'])
+                        if ($postmetaResult->meta_value == $line['price'])
                             break;
-
-                        $wpdb->update($wpdb->postmeta,
-                            ['meta_value' => $line['price']],
-                            ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
-                        );
-                        $history[$postmetaProduct->meta_id] = $this->_insertToHistory($line, $postmetaProduct);
+                        // Обновляем запись в wp_postmeta
+                        self::_updateRecord($line, $postmetaResult, 'price');
+                        // Формируем операцию
+                        $operations[$postmetaResult->meta_id] = self::_collectOperation($line, $postmetaResult);
                         break;
                     case '_stock':
                         // Не обновлять запись, если значения до и после равны
-                        if ($postmetaProduct->meta_value == $line['stock'])
+                        if ($postmetaResult->meta_value == $line['stock'])
                             break;
-
-                        $wpdb->update($wpdb->postmeta,
-                            ['meta_value' => $line['stock']],
-                            ['post_id' => $postmetaProduct->post_id, 'meta_key' => $postmetaProduct->meta_key]
-                        );
-                        $history[$postmetaProduct->meta_id] = $this->_insertToHistory($line, $postmetaProduct);
+                        // Обновляем запись в wp_postmeta
+                        self::_updateRecord($line, $postmetaResult, 'stock');
+                        // Формируем операцию
+                        $operations[$postmetaResult->meta_id] = self::_collectOperation($line, $postmetaResult);
                         break;
                 }
             }
         }
-
-        return $history;
+        return $operations;
     }
 
     /**
-     * @param string $price
-     * @return integer
+     * Обновление записи в wp_postmeta
+     *
+     * @param array $line
+     * @param $postmetaResult
+     * @param string $metaValue
      */
-    private function _applyRuleToPrice($price)
+    private static function _updateRecord($line, $postmetaResult, $metaValue)
+    {
+        // Получение данных и условий для SQL-запроса
+        $data = ['meta_value' => $line[$metaValue]];
+        $where = ['post_id' => $postmetaResult->post_id, 'meta_key' => $postmetaResult->meta_key];
+
+        global $wpdb;
+
+        $wpdb->update($wpdb->postmeta, $data, $where);
+    }
+
+    /**
+     * Правило формирования стоимости
+     *
+     * @param integer $price
+     * @return int
+     */
+    private static function _applyPriceRule($price)
     {
         $price = (int)preg_replace('/[^0-9]/', '', $price);
         return $price % 50 === 0 ? $price : ($price + (50 - $price % 50));
     }
 
     /**
+     * Формирование операции
+     *
      * @param array $line
-     * @param $postmetaProduct
+     * @param $postmetaResult
      * @return array
      */
-    private function _insertToHistory($line, $postmetaProduct)
+    private static function _collectOperation($line, $postmetaResult)
     {
-        $metaValueBefore = $line[str_replace('_', '', $postmetaProduct->meta_key)];
         return [
-            'name' => $line['name'], 'sku' => $line['name'],
-            'meta_key' => $postmetaProduct->meta_key,
-            'meta_value_after' => $postmetaProduct->meta_value,
-            'meta_value_before' => $metaValueBefore,
+            'name'  => $line['name'],
+            'sku'   => $line['sku'],
+            'key'   => $postmetaResult->meta_key,
+            'old'   => $postmetaResult->meta_value,
+            'new'   => $line[str_replace('_', '', $postmetaResult->meta_key)],
         ];
-    }
-
-    /**
-     * @param string $filename
-     * @return string
-     */
-    public static function getFileInformation($filename = '')
-    {
-        return parent::getFileInformation($filename ?: self::FILENAME);
     }
 }
 
 /**
- * Class CsvExtendedImport
+ * Class ExtendedCsvImport
  */
-class CsvExtendedImport extends CsvImport implements CsvImportInterface
+class ExtendedCsvImport extends CsvImport
 {
     const FILENAME = 'csv_extended.csv';
+    const CUR_PAGE = 'exchange_bus_csv_extended_page';
 
-    /**
-     * @param stdClass $stdClass
-     * @return array
-     */
-    public function  getWarehouses($stdClass)
+    public static function getWarehouses()
     {
         $warehouses = [];
-        $header = $this->_getHeaderString($stdClass->filepath);
-        foreach ($header as $item) {
-            if (preg_match('/склад$|склад[ ]/ui', $item)) {
-                $warehouses[md5($item)] = $item;
-            }
-        }
+
         return $warehouses;
     }
 
     /**
-     * @param string $filepath
+     * Синхронизация данных
+     *
      * @return array
      */
-    private function _getHeaderString($filepath)
+    public function synchronization()
     {
-        $file = fopen($filepath, 'r');
-        $headers = [];
-        $counter = 0;
-
-        while (!feof($file)) {
-            if ($counter === 1)
-                break;
-            $headers = fgetcsv($file);
-            ++$counter;
-        }
-
-        fclose($file);
-
-        return $headers;
-    }
-
-    /**
-     * @param string $filename
-     * @return string
-     */
-    public static function getFileInformation($filename = '')
-    {
-        return parent::getFileInformation($filename ?: self::FILENAME);
+        // TODO: Implement synchronization() method.
     }
 }

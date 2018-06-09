@@ -1,11 +1,20 @@
+<?php
+/**
+ * @var StandardCsvImport $standardCsvImport
+ * @var ExtendedCsvImport $extendedCsvImport
+ */
+?>
+
 <div>
     <h2>Шина синхронизации данных</h2>
 </div>
-<div>
-    <div><?= CsvStandardImport::getFileInformation() ?></div>
-    <div><?= ExchangeBusHelper::addActionButton('exchange_bus_csv_standard_page') ?></div>
+
+<?= $standardCsvImport->getCharacterization() ?>
+<div style="margin-top: 15px;">
+    <?=  ExchangeBusHelper::addActionButton(StandardCsvImport::CUR_PAGE) ?>
 </div>
-<div style="margin-top: 10px;">
-    <div><?= CsvExtendedImport::getFileInformation() ?></div>
-    <div><?= ExchangeBusHelper::addActionButton('exchange_bus_csv_extended_page') ?></div>
+
+<?= $extendedCsvImport->getCharacterization() ?>
+<div style="margin-top: 15px;">
+    <?=  ExchangeBusHelper::addActionButton(ExtendedCsvImport::CUR_PAGE) ?>
 </div>
