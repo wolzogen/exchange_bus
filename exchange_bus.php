@@ -3,7 +3,7 @@
 Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 2.0.3
+Version: 3.0.1
 Author: wolzogen
 */
 
@@ -33,7 +33,7 @@ function exchange_bus_module_page()
 function exchange_bus_csv_standard_page()
 {
     try {
-        /** @see template/standard_csv_import.php */
+        /** @see template/import_standard.php */
         $standardCsvImport = new StandardCsvImport;
         // Загружаем в память файл для последующей синхронизации
         $standardCsvImport->load();
@@ -46,9 +46,14 @@ function exchange_bus_csv_standard_page()
 // Функция контента для страницы exchange_bus_csv_extended_page
 function exchange_bus_csv_extended_page()
 {
+    $synchronization = false;
     try {
-        /** @see template/standard_csv_import.php */
+        /** @see template/import_extended.php */
         $extendedCsvImport = new ExtendedCsvImport;
+        // Проверяем режим синхронизации через параметр с формы
+        if (isset($_POST['warehouses']) && !empty($_POST['warehouses'])) {
+            $synchronization = true;
+        }
         // $extendedCsvImport->load();
         require_once 'template/import_extended.php';
     } catch (LogicException $e) {
@@ -253,11 +258,11 @@ class StandardCsvImport extends CsvImport
     private static function _collectOperation($line, $postmetaResult)
     {
         return [
-            'name'  => $line['name'],
-            'sku'   => $line['sku'],
-            'key'   => $postmetaResult->meta_key,
-            'old'   => $postmetaResult->meta_value,
-            'new'   => $line[str_replace('_', '', $postmetaResult->meta_key)],
+            'name' => $line['name'],
+            'sku' => $line['sku'],
+            'key' => $postmetaResult->meta_key,
+            'old' => $postmetaResult->meta_value,
+            'new' => $line[str_replace('_', '', $postmetaResult->meta_key)],
         ];
     }
 }
@@ -270,11 +275,41 @@ class ExtendedCsvImport extends CsvImport
     const FILENAME = 'csv_extended.csv';
     const CUR_PAGE = 'exchange_bus_csv_extended_page';
 
+    // Получение списка складов из первой строки, разбитой в массив, по ключевому слову - "склад"
     public static function getWarehouses()
     {
         $warehouses = [];
-
+        $headers = self::_getHeaders(get_home_path() . self::FILENAME);
+        foreach ($headers as $key => $value) {
+            if (preg_match('/склад$|склад[ ]/ui', $value)) {
+                $warehouses[$key] = $value;
+            }
+        }
         return $warehouses;
+    }
+
+    /**
+     * Получение первой строки файла
+     *
+     * @param string $filepath
+     * @return array
+     */
+    private static function _getHeaders($filepath)
+    {
+        $headers = [];
+        // Если файл отсутствует, то возвращаем пустой массив
+        if (!$file = fopen($filepath, 'r'))
+            return $headers;
+        $counter = 0;
+        // Получаем первую строку и прерываем исполнение
+        while (!feof($file)) {
+            if ($counter++ === 1)
+                break;
+            $headers = fgetcsv($file);
+        }
+        // Закрываем файл и возвращаем результат выполнения
+        fclose($file);
+        return $headers;
     }
 
     /**
