@@ -53,8 +53,9 @@ function exchange_bus_csv_extended_page()
         // Проверяем режим синхронизации через параметр с формы
         if (isset($_POST['warehouses']) && !empty($_POST['warehouses'])) {
             $synchronization = true;
+            // Загружаем в память файл для последующей синхронизации
+            $extendedCsvImport->load();
         }
-        // $extendedCsvImport->load();
         require_once 'template/import_extended.php';
     } catch (LogicException $e) {
         echo $e->getMessage();

@@ -12,13 +12,14 @@
 <!-- Выбор склада или Синхронизация -->
 <?php if ($synchronization) : ?>
     <h2>Результат импортирования</h2>
+
 <?php else : ?>
     <h2>Выберите синхронизируемые склады</h2>
     <form action="<?= ExchangeBusHelper::WP_ADMIN_URL . ExtendedCsvImport::CUR_PAGE ?>" method="post">
     <form action="/wp-admin/admin.php?page=exchange_bus_csv_extended_page" method="post">
         <?php foreach (ExtendedCsvImport::getWarehouses() as $key => $value) : ?>
             <div>
-                <input type="checkbox" id="warehouse_<?= $key ?>" name="warehouse[<?= $key ?>]" value="<?= $key ?>"/>
+                <input type="checkbox" id="warehouse_<?= $key ?>" name="warehouses[<?= $key ?>]" value="<?= $key ?>"/>
                 <label for="warehouse_<?= $key ?>"><?= $value ?></label>
             </div>
         <?php endforeach; ?>
