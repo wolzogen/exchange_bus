@@ -5,7 +5,6 @@
  */
 ?>
 
-<h2>CSV Standard Import</h2>
 <?= $standardCsvImport->getCharacterization() ?>
 
 <h2>Результат импортирования</h2>

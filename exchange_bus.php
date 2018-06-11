@@ -3,7 +3,7 @@
 Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 3.0.1
+Version: 3.1.1
 Author: wolzogen
 */
 
@@ -23,15 +23,25 @@ function exchange_bus_add_pages()
 // Функция контента для страницы exchange_bus_module_page
 function exchange_bus_module_page()
 {
-    /** @see template/standard_csv_import.php */
-    $standardCsvImport = new StandardCsvImport;
-    $extendedCsvImport = new ExtendedCsvImport;
-    require_once 'template/module_page.php';
+    echo <<<HTML
+<div>
+    <h2>Шина синхронизации данных</h2>
+</div>
+HTML;
+    try {
+        /** @see template/standard_csv_import.php */
+        $standardCsvImport = new StandardCsvImport;
+        $extendedCsvImport = new ExtendedCsvImport;
+        require_once 'template/module_page.php';
+    } catch (LogicException $e) {
+        echo $e->getMessage();
+    }
 }
 
 // Функция контента для страницы exchange_bus_csv_standard_page
 function exchange_bus_csv_standard_page()
 {
+    echo '<h2>CSV Standard Import</h2>';
     try {
         /** @see template/import_standard.php */
         $standardCsvImport = new StandardCsvImport;
@@ -46,6 +56,7 @@ function exchange_bus_csv_standard_page()
 // Функция контента для страницы exchange_bus_csv_extended_page
 function exchange_bus_csv_extended_page()
 {
+    echo '<h2>CSV Extended Import</h2>';
     $synchronization = false;
     try {
         /** @see template/import_extended.php */
@@ -119,18 +130,21 @@ abstract class CsvImport implements CsvImportInterface
      */
     protected $content = [];
 
+    public function __construct()
+    {
+        // Если не существует текущего файла, то выбрасываем LogicException
+        if (!file_exists(get_home_path() . static::FILENAME)) {
+            throw new LogicException(sprintf('<h4>Файл %s не найден</h4>', static::FILENAME));
+        }
+    }
+
     /**
      * @return mixed|void
      */
     public function load()
     {
-        $filepath = get_home_path() . static::FILENAME;
-        // Если не существует текущего файла, то выбрасываем LogicException
-        if (!file_exists($filepath)) {
-            throw new LogicException(sprintf('Файл %s не найден', static::FILENAME));
-        }
         // Получаем данные из файла и разбиваем их в массив по разделителю PHP_EOL
-        $this->content = explode(PHP_EOL, file_get_contents($filepath));
+        $this->content = explode(PHP_EOL, file_get_contents(get_home_path() . static::FILENAME));
     }
 
     /**

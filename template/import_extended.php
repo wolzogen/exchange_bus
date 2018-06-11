@@ -6,7 +6,6 @@
  */
 ?>
 
-<h2>CSV Extended Import</h2>
 <?= $extendedCsvImport->getCharacterization() ?>
 
 <!-- Выбор склада или Синхронизация -->
