@@ -19,6 +19,7 @@
 protected function applyPriceRule($price)
 {
     $price = (int)preg_replace('/[^0-9]/', '', $price);
-    return $price % 50 === 0 ? $price : ($price + (50 - $price % 50));
+    return $price % self::PRICE_COEFFICIENT === 0 ?
+        $price : ($price + (self::PRICE_COEFFICIENT - $price % self::PRICE_COEFFICIENT));
 }
 ``` 
