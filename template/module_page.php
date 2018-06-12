@@ -1,16 +1,21 @@
 <?php
 /**
- * @var StandardCsvImport $standardCsvImport
- * @var ExtendedCsvImport $extendedCsvImport
+ * @var array $objects
  */
 ?>
 
-<?= $standardCsvImport->getCharacterization() ?>
-<div style="margin-top: 15px;">
-    <?=  ExchangeBusHelper::addActionButton(StandardCsvImport::CUR_PAGE) ?>
-</div>
-
-<?= $extendedCsvImport->getCharacterization() ?>
-<div style="margin-top: 15px;">
-    <?=  ExchangeBusHelper::addActionButton(ExtendedCsvImport::CUR_PAGE) ?>
-</div>
+<?php foreach ($objects as $object) : ?>
+    <?php if ($object['error']) :
+        echo $object['message'];
+    else :
+        /** @var CsvImport $object */
+        $object = $object['object'];
+        // Получаем описание файла
+        echo $object->getCharacterization();
+        // Формируем кнопку "Синхронизация"
+        ?>
+        <div style="margin-top: 15px;">
+            <?=  ExchangeBusHelper::addActionButton(constant(get_class($object).'::CUR_PAGE')) ?>
+        </div>
+    <?php endif; ?>
+<?php endforeach; ?>

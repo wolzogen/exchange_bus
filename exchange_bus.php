@@ -3,7 +3,7 @@
 Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 4.0.1
+Version: 4.1.1
 Author: wolzogen
 */
 
@@ -28,14 +28,15 @@ function exchange_bus_module_page()
     <h2>Шина синхронизации данных</h2>
 </div>
 HTML;
-    try {
-        /** @see template/standard_csv_import.php */
-        $standardCsvImport = new StandardCsvImport;
-        $extendedCsvImport = new ExtendedCsvImport;
-        require_once 'template/module_page.php';
-    } catch (LogicException $e) {
-        echo $e->getMessage();
+    $objects = [];
+    foreach (['StandardCsvImport', 'ExtendedCsvImport'] as $import) {
+        try {
+            $objects[] = ['error' => false, 'object' => new $import];
+        } catch (LogicException $e) {
+            $objects[] = ['error' => true, 'message' => $e->getMessage()];
+        }
     }
+    require_once 'template/module_page.php';
 }
 
 // Функция контента для страницы exchange_bus_csv_standard_page
