@@ -160,6 +160,59 @@ abstract class CsvImport implements CsvImportInterface
 
         return $content;
     }
+
+    /**
+     * Получение записи по Stock Keeping Unit
+     *
+     * @param string $sku
+     * @return bool|mixed
+     */
+    protected function getPostmetaBySku($sku)
+    {
+        global $wpdb;
+        // Подготавливаем и выполняем запрос, в котором ищем записи по полю _sku
+        $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d", '_sku', $sku);
+        $postmetaBySkuResults = $wpdb->get_results($sqlPrepare);
+        // На уровне базы не гарантируется уникальность записи по sku
+        if (count($postmetaBySkuResults) !== 1)
+            return false;
+        // Получаем первый элемент массива
+        return array_shift($postmetaBySkuResults);
+    }
+
+    /**
+     * Получение записи по post_id, где meta_value содержит _stock и _price
+     *
+     * @param $postId
+     * @return array|bool|null|object
+     */
+    protected function getPostmetaById($postId)
+    {
+        global $wpdb;
+        // Подготавливаем и выполняем запрос, в котором ищем записи по полю post_id и выбираем записи, где meta_value содержит _stock и _price
+        $sqlPrepare = $wpdb->prepare(
+            "SELECT * FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key in(%s, %s)",
+            $postId, '_stock', '_price'
+        );
+        $postmetaStockAndPriceResults = $wpdb->get_results($sqlPrepare);
+        // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
+        if (count($postmetaStockAndPriceResults) !== 2)
+            return false;
+
+        return $postmetaStockAndPriceResults;
+    }
+
+    /**
+     * Правило формирования стоимости
+     *
+     * @param integer $price
+     * @return int
+     */
+    protected function applyPriceRule($price)
+    {
+        $price = (int)preg_replace('/[^0-9]/', '', $price);
+        return $price % 50 === 0 ? $price : ($price + (50 - $price % 50));
+    }
 }
 
 /**
@@ -177,8 +230,6 @@ class StandardCsvImport extends CsvImport
      */
     public function synchronization()
     {
-        global $wpdb;
-
         $operations = [];
         // Зараннее просчитываем количество элементов в массиве, что бы не пересчитывать каждую итерацию в цикле
         $count = count($this->content);
@@ -189,27 +240,17 @@ class StandardCsvImport extends CsvImport
                 continue;
             // Формируем массив с ключами для более удобного обращения к массиву
             $line = array_combine(['name', 'sku', 'stock', 'price'], str_getcsv($this->content[$i], ';'));
-            // Подготавливаем и выполняем запрос, в котором ищем записи по полю _sku
-            $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d", '_sku', $line['sku']);
-            $postmetaBySkuResults = $wpdb->get_results($sqlPrepare);
-            // На уровне базы не гарантируется уникальность записи по sku
-            if (count($postmetaBySkuResults) !== 1)
+            // Получение записи по Stock Keeping Unit
+            if (!$postmetaSku = $this->getPostmetaBySku($line['sku']))
                 continue;
-            // Устанавливаем указатель на первый элемент массива
-            $postmetaSku = reset($postmetaBySkuResults);
-            $sqlPrepare = $wpdb->prepare(
-                "SELECT * FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key in(%s, %s)",
-                $postmetaSku->post_id, '_stock', '_price'
-            );
-            $postmetaStockAndPriceResults = $wpdb->get_results($sqlPrepare);
-            // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
-            if (count($postmetaStockAndPriceResults) !== 2)
+            // Получение записи по post_id, где meta_value содержит _stock и _price
+            if (!$postmetaStockAndPriceResults = $this->getPostmetaById($postmetaSku->post_id))
                 continue;
             foreach ($postmetaStockAndPriceResults as $postmetaResult) {
                 switch ($postmetaResult->meta_key) {
                     case '_price':
                         // Форматирование стоимости по правилу кратности
-                        $line['price'] = self::_applyPriceRule($line['price']);
+                        $line['price'] = $this->applyPriceRule($line['price']);
                         // Не обновлять запись, если значения до и после равны
                         if ($postmetaResult->meta_value == $line['price'])
                             break;
@@ -252,18 +293,6 @@ class StandardCsvImport extends CsvImport
     }
 
     /**
-     * Правило формирования стоимости
-     *
-     * @param integer $price
-     * @return int
-     */
-    private static function _applyPriceRule($price)
-    {
-        $price = (int)preg_replace('/[^0-9]/', '', $price);
-        return $price % 50 === 0 ? $price : ($price + (50 - $price % 50));
-    }
-
-    /**
      * Формирование операции
      *
      * @param array $line
@@ -290,17 +319,35 @@ class ExtendedCsvImport extends CsvImport
     const FILENAME = 'csv_extended.csv';
     const CUR_PAGE = 'exchange_bus_csv_extended_page';
 
+    public $warehouses = [];
+    // Динмачиская позиция "код склада"
+    private $_posSku = null;
+    // Динамическая позиция "наименование"
+    private $_posName = null;
+    // Динамическая позиция "цена розница"
+    private $_posPrice = null;
+
+
     // Получение списка складов из первой строки, разбитой в массив, по ключевому слову - "склад"
-    public static function getWarehouses()
+    public function getWarehouses($headers = null)
     {
-        $warehouses = [];
-        $headers = self::_getHeaders(get_home_path() . self::FILENAME);
+        $headers = $headers
+            ?: self::_getHeaders(get_home_path() . self::FILENAME);
+
         foreach ($headers as $key => $value) {
-            if (preg_match('/склад$|склад[ ]/ui', $value)) {
-                $warehouses[$key] = $value;
-            }
+            if (preg_match('/склад$|склад[ ]/ui', $value))
+                $this->warehouses[$key] = $value;
+            // Определение позиции "код склада"
+            if ($value === 'код склада')
+                $this->_posSku = $key;
+            // Определение позиции "наименование"
+            if ($value === 'наименование')
+                $this->_posName = $key;
+            // Определение позиции "цена розница"
+            if ($value === 'цена розница')
+                $this->_posPrice = $key;
         }
-        return $warehouses;
+        return $this->warehouses;
     }
 
     /**
@@ -334,6 +381,94 @@ class ExtendedCsvImport extends CsvImport
      */
     public function synchronization()
     {
-        // TODO: Implement synchronization() method.
+        $operations = [];
+        // Зараннее просчитываем количество элементов в массиве, что бы не пересчитывать каждую итерацию в цикле
+        $count = count($this->content);
+
+        for ($i = 0; $i < $count; $i++) {
+            // Формируем массив с ключами для более удобного обращения к массиву
+            $line = str_getcsv($this->content[$i]);
+            // Получаем все склады из заголовка один раз при чтении заголовка, а после пропускаем итерацию
+            if ($i === 0) {
+                $this->getWarehouses($line);
+                continue;
+            }
+            // Пропускаем пустые строки или если не получили запись по Stock Keeping Unit
+            if (empty($this->content[$i]) || !$postmetaSku = $this->getPostmetaBySku($line[$this->_posSku]))
+                continue;
+            // Получение записи по post_id, где meta_value содержит _stock и _price
+            if (!$postmetaStockAndPriceResults = $this->getPostmetaById($postmetaSku->post_id))
+                continue;
+            foreach ($postmetaStockAndPriceResults as $postmetaResult) {
+                switch ($postmetaResult->meta_key) {
+                    case '_price':
+                        // Форматирование стоимости по правилу кратности
+                        $line[11] = $this->applyPriceRule($line[$this->_posPrice]);
+                        // Не обновлять запись, если значения до и после равны
+                        if ($postmetaResult->meta_value == $line[$this->_posPrice])
+                            break;
+                        // Обновляем запись в wp_postmeta
+                        self::_updateRecord($postmetaResult, $line[$this->_posPrice]);
+                        // Формируем операцию
+                        $operations[$postmetaResult->meta_id] = self::_collectOperation($line, $postmetaResult);
+                        break;
+                    case '_stock':
+                        // Получение суммы единиц товаров относительно выбранных складов
+                        $stock = 0;
+                        foreach ($_POST['warehouses'] as $position) {
+                            // Пропускаем итерацию, если позиция склада отсутствует в первой строке загруженного в память файла
+                            if (!isset($line[$position]))
+                                continue;
+                            $stock += $line[$position];
+                        }
+                        // Не обновлять запись, если значения до и после равны
+                        if ($postmetaResult->meta_value == $stock)
+                            break;
+                        // Обновляем запись в wp_postmeta
+                        self::_updateRecord($postmetaResult, $stock);
+                        // Формируем операцию
+                        $operations[$postmetaResult->meta_id] = $this->_collectOperation($line, $postmetaResult, $stock);
+                        break;
+                }
+            }
+        }
+        return $operations;
+    }
+
+    /**
+     * Обновление записи в wp_postmeta
+     *
+     * @param $postmetaResult
+     * @param string $metaValue
+     */
+    private static function _updateRecord($postmetaResult, $metaValue)
+    {
+        // Получение данных и условий для SQL-запроса
+        $data = ['meta_value' => $metaValue];
+        $where = ['post_id' => $postmetaResult->post_id, 'meta_key' => $postmetaResult->meta_key];
+
+        global $wpdb;
+
+        $wpdb->update($wpdb->postmeta, $data, $where);
+    }
+
+    /**
+     * Формирование операции
+     *
+     * @param array $line
+     * @param stdClass $postmetaResult
+     * @param integer $value
+     * @return array
+     */
+    private function _collectOperation($line, $postmetaResult, $value = null)
+    {
+        return [
+            'name' => $line[$this->_posName],
+            'sku' => $line[$this->_posSku],
+            'key' => $postmetaResult->meta_key,
+            'old' => $postmetaResult->meta_value,
+            // Если value существует, то передается stock, наче обращаемся к розничной цене, которая уже изменена в массиве line
+            'new' => $value ?: $line[$this->_posPrice],
+        ];
     }
 }
