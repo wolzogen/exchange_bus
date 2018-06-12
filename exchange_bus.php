@@ -3,7 +3,7 @@
 Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 4.1.1
+Version: 4.1.2
 Author: wolzogen
 */
 
@@ -306,11 +306,11 @@ class StandardCsvImport extends CsvImport
     private static function _collectOperation($line, $postmetaResult)
     {
         return [
-            'name' => $line['name'],
-            'sku' => $line['sku'],
-            'key' => $postmetaResult->meta_key,
-            'old' => $postmetaResult->meta_value,
-            'new' => $line[str_replace('_', '', $postmetaResult->meta_key)],
+            'name'  => $line['name'],
+            'sku'   => $line['sku'],
+            'key'   => $postmetaResult->meta_key,
+            'old'   => $postmetaResult->meta_value,
+            'new'   => $line[str_replace('_', '', $postmetaResult->meta_key)],
         ];
     }
 }
@@ -414,7 +414,7 @@ class ExtendedCsvImport extends CsvImport
                         // Обновляем запись в wp_postmeta
                         self::_updateRecord($postmetaResult, $line[$this->_posPrice]);
                         // Формируем операцию
-                        $operations[$postmetaResult->meta_id] = self::_collectOperation($line, $postmetaResult);
+                        $operations[$postmetaResult->meta_id] = self::_collectOperation($line, $postmetaResult, $line[$this->_posPrice]);
                         break;
                     case '_stock':
                         // Получение суммы единиц товаров относительно выбранных складов
@@ -464,15 +464,14 @@ class ExtendedCsvImport extends CsvImport
      * @param integer $value
      * @return array
      */
-    private function _collectOperation($line, $postmetaResult, $value = null)
+    private function _collectOperation($line, $postmetaResult, $value)
     {
         return [
-            'name' => $line[$this->_posName],
-            'sku' => $line[$this->_posSku],
-            'key' => $postmetaResult->meta_key,
-            'old' => $postmetaResult->meta_value,
-            // Если value существует, то передается stock, наче обращаемся к розничной цене, которая уже изменена в массиве line
-            'new' => $value ?: $line[$this->_posPrice],
+            'name'  => $line[$this->_posName],
+            'sku'   => $line[$this->_posSku],
+            'key'   => $postmetaResult->meta_key,
+            'old'   => $postmetaResult->meta_value,
+            'new'   => $value,
         ];
     }
 }
