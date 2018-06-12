@@ -3,7 +3,7 @@
 Plugin Name: exchange_bus
 Plugin URI: https://github.com/wolzogen/exchange_bus
 Description: Шина синхронизации данных
-Version: 3.1.1
+Version: 4.0.1
 Author: wolzogen
 */
 
@@ -403,7 +403,7 @@ class ExtendedCsvImport extends CsvImport
                 switch ($postmetaResult->meta_key) {
                     case '_price':
                         // Форматирование стоимости по правилу кратности
-                        $line[11] = $this->applyPriceRule($line[$this->_posPrice]);
+                        $line[$this->_posPrice] = $this->applyPriceRule($line[$this->_posPrice]);
                         // Не обновлять запись, если значения до и после равны
                         if ($postmetaResult->meta_value == $line[$this->_posPrice])
                             break;
