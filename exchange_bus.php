@@ -176,11 +176,9 @@ abstract class CsvImport implements CsvImportInterface
         // Подготавливаем и выполняем запрос, в котором ищем записи по полю _sku
         $sqlPrepare = $wpdb->prepare("SELECT * FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %d", '_sku', $sku);
         $postmetaBySkuResults = $wpdb->get_results($sqlPrepare);
-        // На уровне базы не гарантируется уникальность записи по sku
-        if (count($postmetaBySkuResults) !== 1)
-            return false;
-        // Получаем первый элемент массива
-        return array_shift($postmetaBySkuResults);
+        // Получаем первый элемент массива, иначе выходим из метода
+        return count($postmetaBySkuResults) !== 1 ?
+            false : array_shift($postmetaBySkuResults);
     }
 
     /**
@@ -199,10 +197,8 @@ abstract class CsvImport implements CsvImportInterface
         );
         $postmetaStockAndPriceResults = $wpdb->get_results($sqlPrepare);
         // Пропускаем итерацию, если не найдены записи текущего поста со значениями в meta_key = '_stock' и '_price'
-        if (count($postmetaStockAndPriceResults) !== 2)
-            return false;
-
-        return $postmetaStockAndPriceResults;
+        return count($postmetaStockAndPriceResults) !== 2 ?
+            false : $postmetaStockAndPriceResults;
     }
 
     /**
